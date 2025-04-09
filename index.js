@@ -1,43 +1,19 @@
-const express = require('express');
-const mongoose = require('mongoose');
+const socket = io();
+const form = document.getElementById('form');
+const input = document.getElementById('input');
+const messages = document.getElementById('messages');
 
-const path = require('path');
-const configRouter = require('./route/config');
-
-const userRouter = require('./route/user');
-const gamesRouter = require('./route/games');
-
-const decorationRouter = require('./route/decoration');
-const mailboxRouter = require('./route/mailbox');
-
-const databaseConfig = require('./config/database');
-
-// Dont change these
-const app = express();
-const port = 3000;
-
-mongoose.connect(databaseConfig.databaseUrl)
-  .then(() => {
-    console.log(`The connection to database ${databaseConfig.databaseType} is made and working`);
-  })
-  .catch((error) => {
-    console.log('Error connecting to MongoDB Atlas:', error);
+form.addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (input.value) {
+    socket.emit('chat message', input.value);
+    input.value = '';
+  }
 });
 
-app.use(express.json());
-
-app.use('/config', configRouter);
-app.use('/user', userRouter);
-app.use('/game', gamesRouter);
-
-app.use('/decoration', decorationRouter);
-
-app.use('/mailbox', mailboxRouter);
-
-app.all('/', (req, res) => {
-  res.status(200).send('Hello World');
-});
-
-app.listen(port, () => {
-  console.log(`Success your server is available at http://localhost:${port}`);
+socket.on('chat message', (msg) => {
+  const item = document.createElement('li');
+  item.textContent = msg;
+  messages.appendChild(item);
+  messages.scrollTop = messages.scrollHeight;
 });
