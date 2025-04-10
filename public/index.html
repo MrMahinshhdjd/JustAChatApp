@@ -1,47 +1,652 @@
-<!-- public/index.html -->
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Just A Chat App</title>
-  <script src="/socket.io/socket.io.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Web Games Group Chat</title>
   <style>
-    body { font-family: sans-serif; background: #111; color: #eee; }
-    #messages { list-style: none; padding: 0; max-height: 300px; overflow-y: auto; }
-    #messages li { margin: 5px 0; padding: 8px; background: #222; border-radius: 5px; }
-    form { display: flex; margin-top: 10px; }
-    input { flex: 1; padding: 10px; }
-    button { padding: 10px; background: #4e4e90; color: white; border: none; }
+    /* Global Styles */
+    body {
+      font-family: Arial, sans-serif;
+      background: #1e1e1e;
+      color: white;
+      margin: 0;
+      text-align: center;
+      padding-bottom: 60px; /* for bottom tabs */
+      transition: background 0.3s, color 0.3s;
+    }
+    header {
+      padding: 20px;
+      background: #333;
+      font-size: 24px;
+    }
+    /* Pages (only one visible at a time) */
+    .page {
+      display: none;
+      width: 100%;
+      height: calc(100vh - 60px - 60px);
+      overflow-y: auto;
+    }
+    .page.active {
+      display: block;
+    }
+    /* Game Section (unchanged) */
+    .section-title {
+      text-align: left;
+      margin-left: 20px;
+      margin-top: 10px;
+      font-size: 20px;
+    }
+    .game-container {
+      display: flex;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      gap: 10px;
+      padding: 20px;
+    }
+    .game-container::-webkit-scrollbar {
+      display: none;
+    }
+    .game-card {
+      flex: 0 0 auto;
+      background: #2a2a2a;
+      border-radius: 10px;
+      padding: 15px;
+      width: 180px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    .game-card:hover {
+      background: #444;
+    }
+    .game-card img {
+      width: 150px;
+      height: 100px;
+      border-radius: 8px;
+    }
+    .game-card h3 {
+      margin: 10px 0 5px;
+      font-size: 18px;
+    }
+    .game-card p {
+      margin: 0;
+      font-size: 14px;
+    }
+    /* Chat Page (normal view with Chat and Friends toggles) */
+    .chat-page {
+      background: #f5f5f5;
+      color: #333;
+      position: relative;
+    }
+    .chat-top-bar {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      background: #fff;
+      border-bottom: 1px solid #ccc;
+    }
+    .chat-top-bar button {
+      background: none;
+      border: none;
+      font-size: 16px;
+      padding: 10px 20px;
+      cursor: pointer;
+      color: #888;
+    }
+    .chat-top-bar button.active {
+      color: #000;
+      border-bottom: 2px solid #000;
+      font-weight: bold;
+    }
+    .chat-content {
+      padding: 20px;
+    }
+    /* Bottom Tab Navigation (Normal Mode) */
+    .tab-container {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background: #333;
+      display: flex;
+      justify-content: center;
+      border-top: 1px solid #444;
+      z-index: 50;
+    }
+    .tab {
+      padding: 15px 20px;
+      background: #444;
+      color: white;
+      border: none;
+      flex: 1;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .tab.active {
+      background: #007BFF;
+    }
+    /* Group Chat Overlay (Full-Screen) */
+    .group-chat-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #4a4a4a;
+      z-index: 999;
+      display: none;
+      flex-direction: column;
+    }
+    .group-chat-header {
+      background: #333;
+      padding: 15px;
+      display: flex;
+      align-items: center;
+    }
+    .group-chat-header button.back-btn {
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 20px;
+      margin-right: 10px;
+      cursor: pointer;
+    }
+    .group-chat-header h2 {
+      margin: 0;
+      font-size: 20px;
+      flex: 1;
+      text-align: center;
+    }
+    .group-chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 15px;
+    }
+    .message {
+      margin: 8px 0;
+      max-width: 70%;
+      padding: 10px;
+      border-radius: 8px;
+      clear: both;
+    }
+    /* Message bubble styles */
+    .other-message {
+      background: #ddd;
+      color: #333;
+      float: left;
+      text-align: left;
+    }
+    .my-message {
+      background: #007BFF;
+      color: #fff;
+      float: right;
+      text-align: left;
+    }
+    /* Typing indicator */
+    .typing-indicator {
+      font-size: 14px;
+      color: #ccc;
+      padding: 0 15px;
+      height: 20px;
+      text-align: left;
+    }
+    /* Group Chat input bar */
+    .group-chat-input {
+      display: flex;
+      padding: 15px;
+      background: #333;
+    }
+    .group-chat-input input {
+      flex: 1;
+      padding: 10px 15px;
+      border: none;
+      border-radius: 20px;
+      margin-right: 10px;
+      outline: none;
+      font-size: 16px;
+    }
+    .group-chat-input button {
+      background: #007BFF;
+      border: none;
+      padding: 10px 20px;
+      color: #fff;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .group-chat-input button:hover {
+      background: #0056b3;
+    }
+    /* User Page (unchanged) */
+    .user-page {
+      background: #222;
+      color: #fff;
+      text-align: center;
+      padding: 20px;
+    }
+    .user-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .user-header img {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      margin-bottom: 10px;
+    }
+    .user-info h2 {
+      margin: 0;
+      font-size: 20px;
+    }
+    .user-info p {
+      margin: 5px 0;
+      font-size: 16px;
+      color: #ccc;
+    }
+    /* Game Details Popup (unchanged) */
+    .game-details {
+      position: fixed;
+      bottom: -100%;
+      left: 0;
+      width: 100%;
+      background: #222;
+      padding: 20px;
+      box-shadow: 0px -4px 10px rgba(0,0,0,0.5);
+      transition: bottom 0.5s ease-in-out;
+      z-index: 100;
+    }
+    .game-details.active {
+      bottom: 0;
+    }
+    .game-header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+    .game-header img {
+      width: 60px;
+      height: 60px;
+      border-radius: 8px;
+      margin-right: 15px;
+    }
+    .desc-box {
+      background: #2a2a2a;
+      padding: 15px;
+      border-radius: 10px;
+      margin-top: 15px;
+      text-align: left;
+    }
+    .popularity {
+      color: #ff6384;
+      font-size: 18px;
+    }
+    .close-btn {
+      background: red;
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      padding: 10px;
+      font-size: 16px;
+      border: none;
+      color: #fff;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .close-btn:hover {
+      background: darkred;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      margin: 10px;
+      cursor: pointer;
+      font-size: 16px;
+      border-radius: 5px;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    /* Background Popup (unchanged) */
+    #bg-popup {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      width: 280px;
+      transform: translate(-50%, -50%);
+      background: #2a2a2a;
+      border-radius: 8px;
+      padding: 20px;
+      z-index: 999;
+      text-align: center;
+    }
+    #bg-popup button {
+      margin: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+    }
+    #bg-popup h3 {
+      margin-top: 0;
+    }
   </style>
 </head>
 <body>
-  <h1>JustAChatApp</h1>
-  <ul id="messages"></ul>
-  <form id="form">
-    <input id="input" autocomplete="off" placeholder="Type something cool..." />
-    <button>Send</button>
-  </form>
-
+  <header>🎮 Web Games</header>
+  
+  <!-- GAMES PAGE -->
+  <div class="page active" id="games-page">
+    <h2 class="section-title">Recommended Games</h2>
+    <div class="game-container" id="game-list"></div>
+  </div>
+  
+  <!-- CHAT PAGE (Normal View) -->
+  <div class="page chat-page" id="chat-page">
+    <div class="chat-top-bar">
+      <button id="chat-btn" class="active">Chat</button>
+      <button id="friends-btn">Friends</button>
+    </div>
+    <div class="chat-content">
+      <div id="chat-view">
+        <!-- Normal Group Chat List -->
+        <div id="group-chat-list">
+          <p>Welcome! Click below to join Group 1.</p>
+          <button onclick="openGroupChat()">Join Group 1</button>
+        </div>
+      </div>
+      <div id="friends-view" style="display: none;">
+        <p>No friends yet. (Coming soon!)</p>
+      </div>
+    </div>
+  </div>
+  
+  <!-- USER PAGE -->
+  <div class="page user-page" id="user-page">
+    <div class="user-header">
+      <img src="https://via.placeholder.com/80.png?text=Avatar" alt="Avatar">
+      <div class="user-info">
+        <h2 id="username">UserName</h2>
+        <p>ID: 1234567890</p>
+      </div>
+    </div>
+    <button onclick="openBgPopup()">Change Background</button>
+  </div>
+  
+  <!-- GAME DETAILS POPUP (Unchanged) -->
+  <div class="game-details" id="game-details">
+    <button class="close-btn" onclick="closeDetails()">❌</button>
+    <div class="game-header">
+      <img id="game-top-image" src="" alt="Game Image">
+      <h2 id="game-title"></h2>
+    </div>
+    <p class="popularity" id="game-popularity"></p>
+    <div class="desc-box">
+      <h3>About Game</h3>
+      <p id="game-author"></p>
+      <h3>Synopsis</h3>
+      <p id="game-desc"></p>
+    </div>
+    <button id="play-btn">Play</button>
+  </div>
+  
+  <!-- BACKGROUND COLOR POPUP (Unchanged) -->
+  <div id="bg-popup">
+    <h3>Choose Background Color</h3>
+    <button onclick="setBackground('white')">White</button>
+    <button onclick="setBackground('gray')">Gray</button>
+    <button style="background: red;" onclick="closeBgPopup()">Close</button>
+  </div>
+  
+  <!-- BOTTOM TAB NAVIGATION (Normal Mode) -->
+  <div class="tab-container" id="tab-container">
+    <button class="tab active" id="games-tab-btn" onclick="showPage('games')">Games</button>
+    <button class="tab" id="chat-tab-btn" onclick="showPage('chat')">Chat</button>
+    <button class="tab" id="user-tab-btn" onclick="showPage('user')">User</button>
+  </div>
+  
+  <!-- Group Chat Overlay (Full-Screen, hidden by default) -->
+  <div id="groupChatOverlay" class="group-chat-overlay">
+    <div class="group-chat-header">
+      <button class="back-btn" onclick="closeGroupChat()">←</button>
+      <h2>Group 1 Chat</h2>
+    </div>
+    <div class="group-chat-messages" id="groupChatMessages">
+      <!-- Message bubbles will be appended here -->
+    </div>
+    <div class="typing-indicator" id="typingIndicator"></div>
+    <div class="group-chat-input">
+      <input id="groupChatInput" type="text" placeholder="Type your message...">
+      <button id="groupSendBtn">Send</button>
+    </div>
+  </div>
+  
+  <!-- Socket.IO Client Library -->
+  <script src="/socket.io/socket.io.js"></script>
   <script>
-    const socket = io();
-
-    const form = document.getElementById('form');
-    const input = document.getElementById('input');
-    const messages = document.getElementById('messages');
-
-    form.addEventListener('submit', function(e) {
-      e.preventDefault();
-      if (input.value) {
-        socket.emit('chat message', input.value);
-        input.value = '';
+    // ----- Game Cards Logic (Unchanged) -----
+    const games = [
+      { 
+        title: "Sample Block Builder", 
+        desc: "Build your own world with blocks!", 
+        image: "assets/blockbuilder.png", 
+        author: "Your Team", 
+        popularity: "🧱 88% - Creative", 
+        url: "assets/samplebuilder.html"
+      },
+      { 
+        title: "Flappy Bird", 
+        desc: "A Flappy Bird Game.", 
+        image: "assets/flappybird.png", 
+        author: "Mahin Studio", 
+        popularity: "🧱 540 playing - Creative", 
+        url: "assets/flappybird.html"
       }
+    ];
+    
+    const gameList = document.getElementById("game-list");
+    games.forEach((game, index) => {
+      const card = document.createElement("div");
+      card.classList.add("game-card");
+      card.innerHTML = `
+        <img src="${game.image}" alt="${game.title}">
+        <h3>${game.title}</h3>
+        <p>${game.popularity}</p>
+      `;
+      card.onclick = () => showDetails(index);
+      gameList.appendChild(card);
     });
-
-    socket.on('chat message', function(msg) {
-      const item = document.createElement('li');
-      item.textContent = msg;
-      messages.appendChild(item);
-      messages.scrollTop = messages.scrollHeight;
+    
+    function showDetails(index) {
+      const game = games[index];
+      document.getElementById("game-title").textContent = game.title;
+      document.getElementById("game-top-image").src = game.image;
+      document.getElementById("game-desc").textContent = game.desc;
+      document.getElementById("game-author").textContent = `Author: ${game.author}`;
+      document.getElementById("game-popularity").textContent = game.popularity;
+      document.getElementById("play-btn").onclick = () => window.location.href = game.url;
+      document.getElementById("game-details").classList.add("active");
+      document.getElementById("tab-container").style.display = "none";
+    }
+    
+    function closeDetails() {
+      document.getElementById("game-details").classList.remove("active");
+      document.getElementById("tab-container").style.display = "flex";
+    }
+    
+    // ----- Bottom Tab Navigation Logic -----
+    const pages = {
+      games: document.getElementById("games-page"),
+      chat: document.getElementById("chat-page"),
+      user: document.getElementById("user-page")
+    };
+    
+    function showPage(page) {
+      closeDetails();
+      Object.values(pages).forEach(p => p.classList.remove("active"));
+      document.querySelectorAll(".tab").forEach(tab => tab.classList.remove("active"));
+      
+      if (page === "games") {
+        document.getElementById("games-tab-btn").classList.add("active");
+        pages.games.classList.add("active");
+      } else if (page === "chat") {
+        document.getElementById("chat-tab-btn").classList.add("active");
+        pages.chat.classList.add("active");
+      } else if (page === "user") {
+        document.getElementById("user-tab-btn").classList.add("active");
+        pages.user.classList.add("active");
+      }
+    }
+    
+    // ----- Background Popup Functions -----
+    function openBgPopup() {
+      document.getElementById("bg-popup").style.display = "block";
+    }
+    
+    function closeBgPopup() {
+      document.getElementById("bg-popup").style.display = "none";
+    }
+    
+    function setBackground(color) {
+      closeBgPopup();
+      if (color === 'white') {
+        document.body.style.background = '#ffffff';
+        document.body.style.color = '#000000';
+      } else if (color === 'gray') {
+        document.body.style.background = '#aaaaaa';
+        document.body.style.color = '#000000';
+      }
+    }
+    
+    // ----- Chat & Friends Toggle in Chat Page -----
+    const chatBtn = document.getElementById("chat-btn");
+    const friendsBtn = document.getElementById("friends-btn");
+    const chatView = document.getElementById("chat-view");
+    const friendsView = document.getElementById("friends-view");
+    
+    chatBtn.onclick = () => {
+      chatBtn.classList.add("active");
+      friendsBtn.classList.remove("active");
+      chatView.style.display = "block";
+      friendsView.style.display = "none";
+    };
+    
+    friendsBtn.onclick = () => {
+      friendsBtn.classList.add("active");
+      chatBtn.classList.remove("active");
+      chatView.style.display = "none";
+      friendsView.style.display = "block";
+    };
+    
+    // ----- Group Chat (Socket.IO + MongoDB History + Typing Indicator) Logic -----
+    let currentUser = '';
+    let socket = null;
+    const groupRoom = "group1";
+    
+    // Prompt for username when page loads and initialize socket.
+    window.onload = function() {
+      currentUser = prompt("Enter your username:");
+      if (!currentUser || currentUser.trim() === "") {
+        currentUser = "Anonymous" + Math.floor(Math.random() * 1000);
+      }
+      document.getElementById("username").textContent = currentUser;
+      initSocket();
+    };
+    
+    // Initialize Socket.IO, join group room, and load message history.
+    function initSocket() {
+      socket = io();
+      socket.emit("register", { username: currentUser });
+      
+      socket.on("connect", () => {
+        socket.emit("join-group", { room: groupRoom });
+        loadMessageHistory();
+      });
+      
+      socket.on("group-message", (data) => {
+        appendGroupMessage(`${data.from}: ${data.message}`, data.from === currentUser);
+      });
+      
+      socket.on("typing", (data) => {
+        const typingIndicator = document.getElementById("typingIndicator");
+        if (data.typing && data.from !== currentUser) {
+          typingIndicator.textContent = `${data.from} is typing...`;
+        } else {
+          typingIndicator.textContent = "";
+        }
+      });
+    }
+    
+    // Load message history from your server endpoint.
+    function loadMessageHistory() {
+      fetch(`/messages?room=${groupRoom}`)
+        .then(res => res.json())
+        .then(data => {
+          const overlayMsgArea = document.getElementById("groupChatMessages");
+          overlayMsgArea.innerHTML = "";
+          data.forEach(msg => {
+            appendGroupMessage(`${msg.from}: ${msg.message}`, msg.from === currentUser);
+          });
+          overlayMsgArea.scrollTop = overlayMsgArea.scrollHeight;
+        })
+        .catch(err => console.error("Error loading message history:", err));
+    }
+    
+    // Append a message bubble to the group chat overlay.
+    function appendGroupMessage(text, isMyMessage) {
+      const overlayMsgArea = document.getElementById("groupChatMessages");
+      const msgElem = document.createElement("div");
+      msgElem.classList.add("message");
+      msgElem.classList.add(isMyMessage ? "my-message" : "other-message");
+      msgElem.textContent = text;
+      overlayMsgArea.appendChild(msgElem);
+      overlayMsgArea.scrollTop = overlayMsgArea.scrollHeight;
+    }
+    
+    // Show the group chat overlay; hide the bottom tabs.
+    function openGroupChat() {
+      document.getElementById("tab-container").style.display = "none";
+      document.getElementById("groupChatOverlay").style.display = "flex";
+      loadMessageHistory();
+    }
+    
+    // Close the group chat overlay; show the bottom tabs again.
+    function closeGroupChat() {
+      document.getElementById("groupChatOverlay").style.display = "none";
+      document.getElementById("tab-container").style.display = "flex";
+      // Clear the overlay area if desired
+      document.getElementById("groupChatMessages").innerHTML = "";
+    }
+    
+    // Handle sending a message in the group chat overlay.
+    document.getElementById("groupSendBtn").addEventListener("click", () => {
+      const input = document.getElementById("groupChatInput");
+      const message = input.value.trim();
+      if (message === "") return;
+      
+      socket.emit("group-message", { room: groupRoom, from: currentUser, message });
+      appendGroupMessage(`You: ${message}`, true);
+      input.value = "";
+      socket.emit("typing", { room: groupRoom, from: currentUser, typing: false });
+    });
+    
+    // Emit typing events when input changes in the group chat overlay.
+    let typingTimeout;
+    const groupChatInput = document.getElementById("groupChatInput");
+    groupChatInput.addEventListener("input", () => {
+      if (groupChatInput.value.trim() !== "") {
+        socket.emit("typing", { room: groupRoom, from: currentUser, typing: true });
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+          socket.emit("typing", { room: groupRoom, from: currentUser, typing: false });
+        }, 2000);
+      } else {
+        socket.emit("typing", { room: groupRoom, from: currentUser, typing: false });
+      }
     });
   </script>
 </body>
-</html>
+  </html>
